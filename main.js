@@ -38,24 +38,232 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var zksync = require("zksync-web3");
 var ethers = require("ethers");
-var AccountsData_1 = require("./AccountsData");
-// Currently, only one environment is supported.
+var flatted = require("flatted");
+var fs = require("fs");
+var AccountsData_1 = require("./Data/AccountsData");
+var TokensData_1 = require("./Data/TokensData");
+var Contracts_1 = require("./Data/Contracts");
+/*
+ * Const.
+ */
+// Max approve value.
+var MAX_APPROVE_VALUE = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+/*
+ * Logs function.
+ */
+// Opening a file for recording
+var logFile = fs.createWriteStream('logs.txt', { flags: 'a' });
+// Function for logging to a file
+function writeLog(log) {
+    var logString = flatted.stringify(log);
+    logFile.write("".concat(new Date().toISOString(), " ").concat(logString, "\n"));
+}
+/*
+ * Setup Providers.
+ */
+// ZkSync Era Provider
 var zkSyncProvider = new zksync.Provider("https://testnet.era.zksync.dev");
+// Ethereum Provider
 var ethProvider = ethers.getDefaultProvider("goerli");
-//Creating a wallet
-var zkSyncWallet = new zksync.Wallet(AccountsData_1.AccountsData, zkSyncProvider, ethProvider);
-function commitEthBalance() {
+/*
+ * swapETHToToken function.
+ */
+function swapETHToToken(signer, AmountETH, tokenOutAddress) {
     return __awaiter(this, void 0, void 0, function () {
-        var committedEthBalance;
+        var classicPoolFactory, tokenForPool, ClassicPoolAddress, withdrawMode, swapData, steps, paths, router, response, tx;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, zkSyncWallet.getBalance(zksync.utils.ETH_ADDRESS)];
+                case 0:
+                    classicPoolFactory = new ethers.Contract(Contracts_1.Contracts.ClassicPoolFactoryContract.Address, Contracts_1.Contracts.ClassicPoolFactoryContract.ContractABI, zkSyncProvider);
+                    tokenForPool = Contracts_1.Contracts.wETH.Address;
+                    return [4 /*yield*/, classicPoolFactory.getPool(tokenForPool, tokenOutAddress)];
                 case 1:
-                    committedEthBalance = _a.sent();
-                    console.log(committedEthBalance);
+                    ClassicPoolAddress = _a.sent();
+                    writeLog("ClassicPoolAddress =");
+                    writeLog(ClassicPoolAddress);
+                    // Checks whether the pool exists.
+                    if (ClassicPoolAddress === ethers.constants.AddressZero) {
+                        throw Error('Pool not exists');
+                    }
+                    withdrawMode = 1;
+                    swapData = ethers.utils.defaultAbiCoder.encode(["address", "address", "uint8"], [tokenForPool, signer.address, withdrawMode]);
+                    steps = [{
+                            pool: ClassicPoolAddress,
+                            data: swapData,
+                            callback: ethers.constants.AddressZero,
+                            callbackData: '0x',
+                        }];
+                    paths = [{
+                            steps: steps,
+                            tokenIn: ethers.constants.AddressZero,
+                            amountIn: AmountETH,
+                        }];
+                    router = new ethers.Contract(Contracts_1.Contracts.RouterContract.Address, Contracts_1.Contracts.RouterContract.ContractABI, signer);
+                    return [4 /*yield*/, router.swap(paths, // paths
+                        0, // amountOutMin // Note: ensures slippage here
+                        ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
+                        {
+                            value: AmountETH,
+                            gasLimit: TokensData_1.AmountGasLimit
+                        })];
+                case 2:
+                    response = _a.sent();
+                    return [4 /*yield*/, response.wait()];
+                case 3:
+                    tx = _a.sent();
+                    writeLog("Swap ETH to token transaction hash =");
+                    writeLog(tx.transactionHash);
                     return [2 /*return*/];
             }
         });
     });
 }
-commitEthBalance();
+/*
+ * swapTokenToETH function.
+ */
+function swapTokenToETH(signer, tokenInAddress, tokenInAmount) {
+    return __awaiter(this, void 0, void 0, function () {
+        var classicPoolFactory, tokenOutPool, ClassicPoolAddress, tokenInContract, allowedAmount, approveTx, getApproveTx, withdrawMode, swapData, steps, paths, router, response, tx;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    classicPoolFactory = new ethers.Contract(Contracts_1.Contracts.ClassicPoolFactoryContract.Address, Contracts_1.Contracts.ClassicPoolFactoryContract.ContractABI, zkSyncProvider);
+                    tokenOutPool = Contracts_1.Contracts.wETH.Address;
+                    return [4 /*yield*/, classicPoolFactory.getPool(tokenInAddress, tokenOutPool)];
+                case 1:
+                    ClassicPoolAddress = _a.sent();
+                    writeLog("ClassicPoolAddress =");
+                    writeLog(ClassicPoolAddress);
+                    // Checks whether the pool exists.
+                    if (ClassicPoolAddress === ethers.constants.AddressZero) {
+                        throw Error('Pool not exists');
+                    }
+                    tokenInContract = new ethers.Contract(tokenInAddress, zksync.utils.IERC20, signer);
+                    return [4 /*yield*/, tokenInContract.allowance(signer.address, Contracts_1.Contracts.RouterContract.Address)];
+                case 2:
+                    allowedAmount = _a.sent();
+                    if (!allowedAmount.lte(tokenInAmount)) return [3 /*break*/, 5];
+                    return [4 /*yield*/, tokenInContract.approve(Contracts_1.Contracts.RouterContract.Address, MAX_APPROVE_VALUE)];
+                case 3:
+                    approveTx = _a.sent();
+                    return [4 /*yield*/, approveTx.wait()];
+                case 4:
+                    getApproveTx = _a.sent();
+                    writeLog("Approve transaction hash =");
+                    writeLog(getApproveTx.transactionHash);
+                    _a.label = 5;
+                case 5:
+                    withdrawMode = 1;
+                    swapData = ethers.utils.defaultAbiCoder.encode(["address", "address", "uint8"], [tokenInAddress, signer.address, withdrawMode]);
+                    steps = [{
+                            pool: ClassicPoolAddress,
+                            data: swapData,
+                            callback: ethers.constants.AddressZero,
+                            callbackData: '0x',
+                        }];
+                    paths = [{
+                            steps: steps,
+                            tokenIn: tokenInAddress,
+                            amountIn: tokenInAmount,
+                        }];
+                    router = new ethers.Contract(Contracts_1.Contracts.RouterContract.Address, Contracts_1.Contracts.RouterContract.ContractABI, signer);
+                    return [4 /*yield*/, router.swap(paths, // paths
+                        0, // amountOutMin // Note: ensures slippage here
+                        ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
+                        {
+                            gasLimit: TokensData_1.AmountGasLimit
+                        })];
+                case 6:
+                    response = _a.sent();
+                    return [4 /*yield*/, response.wait()];
+                case 7:
+                    tx = _a.sent();
+                    writeLog("Swap token to ETH transaction hash =");
+                    writeLog(tx.transactionHash);
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+/*
+ * Main function.
+ */
+// Swaps and liqudity providing
+function main() {
+    return __awaiter(this, void 0, void 0, function () {
+        var i, WorkingSigner, InitialTokenInContract, balanceOf, TokenBalance, AccountBalanceETH, WorkingETH, k, tokenInContract, balanceOf, TokenBalance, FinalAccountBalanceETH;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    i = 0;
+                    _a.label = 1;
+                case 1:
+                    if (!(i <= AccountsData_1.AccountsData.length - 1)) return [3 /*break*/, 12];
+                    WorkingSigner = new zksync.Wallet(AccountsData_1.AccountsData[i], zkSyncProvider, ethProvider);
+                    writeLog("Account now working =");
+                    writeLog(WorkingSigner.address);
+                    InitialTokenInContract = new ethers.Contract(TokensData_1.ySYNCTokenAddress, zksync.utils.IERC20, WorkingSigner);
+                    return [4 /*yield*/, InitialTokenInContract.balanceOf(WorkingSigner.address)];
+                case 2:
+                    balanceOf = _a.sent();
+                    TokenBalance = balanceOf.toString();
+                    writeLog("Initial ySYNC token balance =");
+                    writeLog(TokenBalance);
+                    return [4 /*yield*/, WorkingSigner.getBalance()];
+                case 3:
+                    AccountBalanceETH = _a.sent();
+                    writeLog("Initial ETH balance =");
+                    writeLog(AccountBalanceETH.toString());
+                    WorkingETH = AccountBalanceETH.div(TokensData_1.WorkingProcent).toString();
+                    writeLog(WorkingETH);
+                    k = 0;
+                    _a.label = 4;
+                case 4:
+                    if (!(k <= TokensData_1.TokensData.length - 1)) return [3 /*break*/, 9];
+                    // Swap ETH for token
+                    return [4 /*yield*/, swapETHToToken(WorkingSigner, WorkingETH, TokensData_1.TokensData[k])];
+                case 5:
+                    // Swap ETH for token
+                    _a.sent();
+                    tokenInContract = new ethers.Contract(TokensData_1.TokensData[k], zksync.utils.IERC20, WorkingSigner);
+                    return [4 /*yield*/, tokenInContract.balanceOf(WorkingSigner.address)];
+                case 6:
+                    balanceOf = _a.sent();
+                    TokenBalance = balanceOf.toString();
+                    writeLog("Token balance =");
+                    writeLog(TokenBalance);
+                    // Swap token for ETH
+                    return [4 /*yield*/, swapTokenToETH(WorkingSigner, TokensData_1.TokensData[k], TokenBalance)];
+                case 7:
+                    // Swap token for ETH
+                    _a.sent();
+                    _a.label = 8;
+                case 8:
+                    k++;
+                    return [3 /*break*/, 4];
+                case 9: return [4 /*yield*/, WorkingSigner.getBalance()];
+                case 10:
+                    FinalAccountBalanceETH = _a.sent();
+                    writeLog("Final ETH balance =");
+                    writeLog(FinalAccountBalanceETH.toString());
+                    _a.label = 11;
+                case 11:
+                    i++;
+                    return [3 /*break*/, 1];
+                case 12: return [2 /*return*/];
+            }
+        });
+    });
+}
+// async function addLiquidity(AccountData: string, token1Address: string, token1Amount: string, token2Address: string, token2Amount: string) {
+//     // Make signer from private key
+//     const signer = new zksync.Wallet(AccountData, zkSyncProvider, ethProvider)
+//     writeLog(signer);
+//     address pool, //
+//     TokenInput[] calldata inputs, //
+//     bytes calldata data, //
+//     uint minLiquidity, //
+//     address callback, //
+//     bytes calldata callbackData //
+// }
+main();
