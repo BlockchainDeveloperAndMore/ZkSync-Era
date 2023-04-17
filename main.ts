@@ -3,8 +3,9 @@ import * as ethers from "ethers";
 import * as flatted from 'flatted';
 import * as fs from 'fs';
 import { AccountsData } from "./Data/AccountsData";
-import { TokensData, AmountGasLimit, WorkingProcent , ySYNCTokenAddress, PoolData } from "./Data/TokensData";
+import { TokensData, AmountGasLimit, WorkingProcent , TokenForLiquidity } from "./Data/TokensData";
 import { Contracts } from "./Data/Contracts";
+import { randomInt } from "crypto";
 
 /*
  * Const.
@@ -51,9 +52,9 @@ async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: s
     );
 
     // wETH is used internally by the pools.
-    var tokenForPool = Contracts.wETH.Address;
+    let tokenForPool = Contracts.wETH.Address;
     
-    var ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenForPool, tokenOutAddress);
+    let ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenForPool, tokenOutAddress);
     writeLog("ClassicPoolAddress =");
     writeLog(ClassicPoolAddress);
 
@@ -92,16 +93,17 @@ async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: s
     );    
 
     // The router will handle the deposit to the pool's vault account.
-        var response = await router.swap(
-            paths, // paths
-            0, // amountOutMin // Note: ensures slippage here
-            ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
-            {
-                value: AmountETH,
-                gasLimit: AmountGasLimit
-            }
-        );
-    var tx = await response.wait();
+    var response = await router.swap(
+        paths, // paths
+        0, // amountOutMin // Note: ensures slippage here
+        ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
+        {
+            value: AmountETH,
+            gasLimit: AmountGasLimit
+        }
+    );
+
+    let tx = await response.wait();
     writeLog("Swap ETH to token transaction hash =");
     writeLog(tx.transactionHash);
 }
@@ -120,9 +122,9 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
     );
 
     // wETH is used internally by the pools.
-    var tokenOutPool = Contracts.wETH.Address;
+    let tokenOutPool = Contracts.wETH.Address;
     
-    var ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenInAddress, tokenOutPool);
+    let ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenInAddress, tokenOutPool);
     writeLog("ClassicPoolAddress =");
     writeLog(ClassicPoolAddress);
 
@@ -141,7 +143,7 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
     
         // Send approve for router contract
         let approveTx = await tokenInContract.approve(Contracts.RouterContract.Address, MAX_APPROVE_VALUE)
-        var getApproveTx = await approveTx.wait()
+        let getApproveTx = await approveTx.wait()
         writeLog("Approve transaction hash =")
         writeLog(getApproveTx.transactionHash);
     } 
@@ -178,7 +180,7 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
     );    
 
     // The router will handle the deposit to the pool's vault account.
-        var response = await router.swap(
+    let response = await router.swap(
             paths, // paths
             0, // amountOutMin // Note: ensures slippage here
             ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
@@ -186,8 +188,80 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
                 gasLimit: AmountGasLimit
             }
         );
-    var tx = await response.wait();
+
+    let tx = await response.wait();
     writeLog("Swap token to ETH transaction hash =");
+    writeLog(tx.transactionHash);
+}
+
+/*
+ * Add liquidity function.
+ */
+
+async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddress: string, tokenAmount: string) {
+
+    // The factory of the Classic Pool.
+    const classicPoolFactory = new ethers.Contract(
+        Contracts.ClassicPoolFactoryContract.Address,
+        Contracts.ClassicPoolFactoryContract.ContractABI,
+        zkSyncProvider
+    );
+
+    // LP tokens recipient address.
+    const RecipientAddress = signer.address;
+
+    // wETH is used internally by the pools.
+    let ETHAddress = Contracts.wETH.Address;
+    
+    let ClassicPoolAddress: string = await classicPoolFactory.getPool(ETHAddress, tokenAddress);
+    writeLog("ClassicPoolAddress =");
+    writeLog(ClassicPoolAddress);
+
+    // Checks whether the pool exists.
+    if (ClassicPoolAddress === ethers.constants.AddressZero) {
+        throw Error('Pool not exists');
+    }
+
+    // Calldata for token input.
+    let TokenInput = [{
+        token: tokenAddress,
+        amount: tokenAmount  
+    },{
+        token: ethers.constants.AddressZero,
+        amount: AmountETH     
+    }]
+
+    // Recipient Address calldata.
+    const RecipientAddressData: string = ethers.utils.defaultAbiCoder.encode(
+        ["address"],
+        [RecipientAddress], // address _to
+    );
+    writeLog("RecipientAddressData =");
+    writeLog(RecipientAddressData);
+
+    // Gets the router contract.
+    const router = new ethers.Contract(
+        Contracts.RouterContract.Address, 
+        Contracts.RouterContract.ContractABI, 
+        signer
+    );    
+
+    // The router will handle the deposit to the pool's vault account.
+    let response = await router.addLiquidity(
+        ClassicPoolAddress,             // pool address
+        TokenInput,                     // Tokens Input
+        RecipientAddressData,           // Recipient Address
+        0,                              // minLiquidity // Note: ensures slippage here
+        ethers.constants.AddressZero,   // we don't have a callback
+        '0x',
+        {
+            value: AmountETH, 
+            gasLimit: AmountGasLimit
+        }
+    );
+
+    let tx = await response.wait();
+    writeLog("Add token and ETH liquidity transaction hash =");
     writeLog(tx.transactionHash);
 }
 
@@ -205,65 +279,61 @@ async function main(){
         const WorkingSigner = new zksync.Wallet(AccountsData[i], zkSyncProvider, ethProvider);
         writeLog("Account now working =");
         writeLog(WorkingSigner.address);        
-        
-        // ySYNC token balance
-        const InitialTokenInContract = new ethers.Contract(ySYNCTokenAddress, zksync.utils.IERC20, WorkingSigner)
-    
-        // Check balance
-        var balanceOf = await InitialTokenInContract.balanceOf(WorkingSigner.address)
-        var TokenBalance: string = balanceOf.toString()
-        writeLog("Initial ySYNC token balance =");
-        writeLog(TokenBalance);
 
         // Getting balance in ETH
-        var AccountBalanceETH = await WorkingSigner.getBalance()
+        let AccountBalanceETH = await WorkingSigner.getBalance();
         writeLog("Initial ETH balance =");
         writeLog(AccountBalanceETH.toString());
 
         // Count working amount for ETH
-        var WorkingETH: string = AccountBalanceETH.div(WorkingProcent).toString();
+        let WorkingETH: string = AccountBalanceETH.div(WorkingProcent).toString();
         writeLog(WorkingETH);
 
-        // Token cycle
-        for (let k = 0; k <= TokensData.length - 1; k++){
+        // Count price for ETH
+        let priceETH = await zkSyncProvider.getTokenPrice(ethers.constants.AddressZero);
+        writeLog("Price ETH =");
+        writeLog(priceETH);
+
+        // Count price in cents for ETH
+        let priceETHInCents = (Number(priceETH))*100;
+        writeLog(priceETHInCents);
+    
+        // 10-11$
+        let liquidityAmountInCents = 1000 + randomInt(100) // random 10-11$ 
+        let liquidityAmountInETH = Math.floor(1000000000000000000 / (priceETHInCents / liquidityAmountInCents)) 
+        writeLog("liquidityAmountInETH =");
+        writeLog(liquidityAmountInETH); 
+
+        // Providing liquidity.
+        await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0')
+
+        // Random tokens
+        const shuffledTokensData = TokensData.sort(() => Math.random() - 0.5); 
+
+        // Tokens swap cycle
+        for (let k = 0; k <= shuffledTokensData.length - 1; k++){
 
             // Swap ETH for token
-            await swapETHToToken(WorkingSigner, WorkingETH, TokensData[k]);
+            await swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k]);
 
             // Create token contract for check token balance
-            const tokenInContract = new ethers.Contract(TokensData[k], zksync.utils.IERC20, WorkingSigner)
+            const tokenInContract = new ethers.Contract(shuffledTokensData[k], zksync.utils.IERC20, WorkingSigner)
     
             // Check balance
-            var balanceOf = await tokenInContract.balanceOf(WorkingSigner.address)
-            var TokenBalance: string = balanceOf.toString()
+            let balanceOf = await tokenInContract.balanceOf(WorkingSigner.address)
+            let TokenBalance: string = balanceOf.toString()
             writeLog("Token balance =");
             writeLog(TokenBalance);
 
             // Swap token for ETH
-            await swapTokenToETH(WorkingSigner, TokensData[k], TokenBalance)
+            await swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance)
         }
 
         // Getting final balance in ETH
-        var FinalAccountBalanceETH = await WorkingSigner.getBalance()
+        let FinalAccountBalanceETH = await WorkingSigner.getBalance()
         writeLog("Final ETH balance =");
         writeLog(FinalAccountBalanceETH.toString());
     }
 }
 
-
-// async function addLiquidity(AccountData: string, token1Address: string, token1Amount: string, token2Address: string, token2Amount: string) {
-    
-//     // Make signer from private key
-//     const signer = new zksync.Wallet(AccountData, zkSyncProvider, ethProvider)
-//     writeLog(signer);
-
-//     address pool, //
-//     TokenInput[] calldata inputs, //
-//     bytes calldata data, //
-//     uint minLiquidity, //
-//     address callback, //
-//     bytes calldata callbackData //
-// }
- 
-
-main();
+main()
