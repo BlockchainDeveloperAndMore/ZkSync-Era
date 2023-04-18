@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TokenForLiquidity = exports.TokensData = exports.AmountGasLimit = exports.WorkingProcent = void 0;
+exports.TokenForLiquidity = exports.TokensData = exports.SwapsCounter = exports.AmountGasLimit = exports.WorkingProcent = void 0;
 var ethers_1 = require("ethers");
-exports.WorkingProcent = ethers_1.BigNumber.from("1000000000"); // 100/100 = 0.01%
-exports.AmountGasLimit = "14000000";
+exports.WorkingProcent = ethers_1.BigNumber.from("13"); // 100/100 = 0.01%
+exports.AmountGasLimit = "80000000";
+1;
+exports.SwapsCounter = 3; // Number of swaps
 // Array with token address for swaping. 
 exports.TokensData = [
     "0x0faF6df7054946141266420b43783387A78d82A9",

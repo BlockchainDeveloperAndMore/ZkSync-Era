@@ -191,10 +191,12 @@ function swapTokenToETH(signer, tokenInAddress, tokenInAmount) {
  */
 function addLiquidityTokenAndETH(signer, AmountETH, tokenAddress, tokenAmount) {
     return __awaiter(this, void 0, void 0, function () {
-        var classicPoolFactory, RecipientAddress, ETHAddress, ClassicPoolAddress, TokenInput, RecipientAddressData, router, response, tx;
+        var alreadyString, readyString, classicPoolFactory, RecipientAddress, ETHAddress, ClassicPoolAddress, LPTokenInContract, balanceOf, LPTokensBalance, TokenInput, RecipientAddressData, router, response, tx;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
+                    alreadyString = "Liquidity already provided!";
+                    readyString = "Liquidity now provided!";
                     classicPoolFactory = new ethers.Contract(Contracts_1.Contracts.ClassicPoolFactoryContract.Address, Contracts_1.Contracts.ClassicPoolFactoryContract.ContractABI, zkSyncProvider);
                     RecipientAddress = signer.address;
                     ETHAddress = Contracts_1.Contracts.wETH.Address;
@@ -207,6 +209,16 @@ function addLiquidityTokenAndETH(signer, AmountETH, tokenAddress, tokenAmount) {
                     if (ClassicPoolAddress === ethers.constants.AddressZero) {
                         throw Error('Pool not exists');
                     }
+                    LPTokenInContract = new ethers.Contract(ClassicPoolAddress, zksync.utils.IERC20, signer);
+                    return [4 /*yield*/, LPTokenInContract.balanceOf(signer.address)];
+                case 2:
+                    balanceOf = _a.sent();
+                    LPTokensBalance = balanceOf.toString();
+                    writeLog("LP token balance =");
+                    writeLog(LPTokensBalance);
+                    if (Number(LPTokensBalance) != 0) {
+                        return [2 /*return*/, alreadyString];
+                    }
                     TokenInput = [{
                             token: tokenAddress,
                             amount: tokenAmount
@@ -218,7 +230,7 @@ function addLiquidityTokenAndETH(signer, AmountETH, tokenAddress, tokenAmount) {
                     writeLog("RecipientAddressData =");
                     writeLog(RecipientAddressData);
                     router = new ethers.Contract(Contracts_1.Contracts.RouterContract.Address, Contracts_1.Contracts.RouterContract.ContractABI, signer);
-                    return [4 /*yield*/, router.addLiquidity(ClassicPoolAddress, // pool address
+                    return [4 /*yield*/, router.addLiquidity2(ClassicPoolAddress, // pool address
                         TokenInput, // Tokens Input
                         RecipientAddressData, // Recipient Address
                         0, // minLiquidity // Note: ensures slippage here
@@ -227,14 +239,14 @@ function addLiquidityTokenAndETH(signer, AmountETH, tokenAddress, tokenAmount) {
                             value: AmountETH,
                             gasLimit: TokensData_1.AmountGasLimit
                         })];
-                case 2:
+                case 3:
                     response = _a.sent();
                     return [4 /*yield*/, response.wait()];
-                case 3:
+                case 4:
                     tx = _a.sent();
                     writeLog("Add token and ETH liquidity transaction hash =");
                     writeLog(tx.transactionHash);
-                    return [2 /*return*/];
+                    return [2 /*return*/, readyString];
             }
         });
     });
@@ -242,17 +254,17 @@ function addLiquidityTokenAndETH(signer, AmountETH, tokenAddress, tokenAmount) {
 /*
  * Main function.
  */
-// Swaps and liqudity providing
+// Swaps and liqudity providing.
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var i, WorkingSigner, AccountBalanceETH, WorkingETH, priceETH, priceETHInCents, liquidityAmountInCents, liquidityAmountInETH, shuffledTokensData, k, tokenInContract, balanceOf, TokenBalance, FinalAccountBalanceETH;
+        var i, WorkingSigner, AccountBalanceETH, WorkingETH, priceETH, priceETHInCents, liquidityAmountInCents, liquidityAmountInETH, promise, n, shuffledTokensData, k, tokenInContract, balanceOf, TokenBalance, FinalAccountBalanceETH;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     i = 0;
                     _a.label = 1;
                 case 1:
-                    if (!(i <= AccountsData_1.AccountsData.length - 1)) return [3 /*break*/, 13];
+                    if (!(i <= AccountsData_1.AccountsData.length - 1)) return [3 /*break*/, 15];
                     WorkingSigner = new zksync.Wallet(AccountsData_1.AccountsData[i], zkSyncProvider, ethProvider);
                     writeLog("Account now working =");
                     writeLog(WorkingSigner.address);
@@ -261,7 +273,7 @@ function main() {
                     AccountBalanceETH = _a.sent();
                     writeLog("Initial ETH balance =");
                     writeLog(AccountBalanceETH.toString());
-                    WorkingETH = AccountBalanceETH.div(TokensData_1.WorkingProcent).toString();
+                    WorkingETH = AccountBalanceETH.div(TokensData_1.WorkingProcent).mul(100).toString();
                     writeLog(WorkingETH);
                     return [4 /*yield*/, zkSyncProvider.getTokenPrice(ethers.constants.AddressZero)];
                 case 3:
@@ -275,51 +287,79 @@ function main() {
                     liquidityAmountInETH = Math.floor(1000000000000000000 / (priceETHInCents / liquidityAmountInCents));
                     writeLog("liquidityAmountInETH =");
                     writeLog(liquidityAmountInETH);
-                    // Providing liquidity.
-                    return [4 /*yield*/, addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString(), TokensData_1.TokenForLiquidity, '0')
-                        // Random tokens
-                    ];
+                    return [4 /*yield*/, addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString(), TokensData_1.TokenForLiquidity, '0')];
                 case 4:
-                    // Providing liquidity.
-                    _a.sent();
-                    shuffledTokensData = TokensData_1.TokensData.sort(function () { return Math.random() - 0.5; });
-                    k = 0;
+                    promise = _a.sent();
+                    writeLog(promise);
+                    n = 0;
                     _a.label = 5;
                 case 5:
-                    if (!(k <= shuffledTokensData.length - 1)) return [3 /*break*/, 10];
-                    // Swap ETH for token
-                    return [4 /*yield*/, swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k])];
+                    if (!(n <= TokensData_1.SwapsCounter - 1)) return [3 /*break*/, 12];
+                    shuffledTokensData = TokensData_1.TokensData.sort(function () { return Math.random() - 0.5; });
+                    k = 0;
+                    _a.label = 6;
                 case 6:
-                    // Swap ETH for token
+                    if (!(k <= shuffledTokensData.length - 1)) return [3 /*break*/, 11];
+                    // Swap ETH for token.
+                    return [4 /*yield*/, swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k])];
+                case 7:
+                    // Swap ETH for token.
                     _a.sent();
                     tokenInContract = new ethers.Contract(shuffledTokensData[k], zksync.utils.IERC20, WorkingSigner);
                     return [4 /*yield*/, tokenInContract.balanceOf(WorkingSigner.address)];
-                case 7:
+                case 8:
                     balanceOf = _a.sent();
                     TokenBalance = balanceOf.toString();
                     writeLog("Token balance =");
                     writeLog(TokenBalance);
-                    // Swap token for ETH
+                    // Swap token for ETH.
                     return [4 /*yield*/, swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance)];
-                case 8:
-                    // Swap token for ETH
-                    _a.sent();
-                    _a.label = 9;
                 case 9:
+                    // Swap token for ETH.
+                    _a.sent();
+                    _a.label = 10;
+                case 10:
                     k++;
-                    return [3 /*break*/, 5];
-                case 10: return [4 /*yield*/, WorkingSigner.getBalance()];
+                    return [3 /*break*/, 6];
                 case 11:
+                    n++;
+                    return [3 /*break*/, 5];
+                case 12: return [4 /*yield*/, WorkingSigner.getBalance()];
+                case 13:
                     FinalAccountBalanceETH = _a.sent();
                     writeLog("Final ETH balance =");
                     writeLog(FinalAccountBalanceETH.toString());
-                    _a.label = 12;
-                case 12:
+                    writeLog("PROGRAMM END");
+                    writeLog("==============================================");
+                    _a.label = 14;
+                case 14:
                     i++;
                     return [3 /*break*/, 1];
-                case 13: return [2 /*return*/];
+                case 15: return [2 /*return*/];
             }
         });
     });
 }
-main();
+//main()
+function test() {
+    return __awaiter(this, void 0, void 0, function () {
+        var WorkingSigner, AccountBalanceETH, WorkingETH;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    WorkingSigner = new zksync.Wallet(AccountsData_1.AccountsData[0], zkSyncProvider, ethProvider);
+                    writeLog("Account now working =");
+                    writeLog(WorkingSigner.address);
+                    return [4 /*yield*/, WorkingSigner.getBalance()];
+                case 1:
+                    AccountBalanceETH = _a.sent();
+                    writeLog("Initial ETH balance =");
+                    writeLog(AccountBalanceETH.toString());
+                    WorkingETH = AccountBalanceETH.div(100).mul(TokensData_1.WorkingProcent).toString();
+                    writeLog(WorkingETH);
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+test();

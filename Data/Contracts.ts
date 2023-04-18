@@ -1,7 +1,7 @@
 
 export var Contracts = {
     ClassicPoolFactoryContract: {
-        Address: "0xf2FD2bc2fBC12842aAb6FbB8b1159a6a83E72006", // for mainnet "0xf2DAd89f2788a8CD54625C60b55cD3d2D0ACa7Cb"
+        Address: "0xf2DAd89f2788a8CD54625C60b55cD3d2D0ACa7Cb", // for testnet "0xf2FD2bc2fBC12842aAb6FbB8b1159a6a83E72006"
         ContractABI: `[
             {
               "inputs": [
@@ -155,7 +155,7 @@ export var Contracts = {
           ]`
     },
     RouterContract:{
-        Address: "0xB3b7fCbb8Db37bC6f572634299A58f51622A847e", // for mainnet "0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295"
+        Address: "0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295", // for testnet "0xB3b7fCbb8Db37bC6f572634299A58f51622A847e"
         ContractABI: `[
             {
               "inputs": [
@@ -2262,9 +2262,9 @@ export var Contracts = {
           ]`
     },
     wETH: {
-        Address: "0x20b28b1e4665fff290650586ad76e977eab90c5d" // for mainnet "0x5aea5775959fbc2557cc8789bc1bf90a239d9a91"
+        Address: "0x5aea5775959fbc2557cc8789bc1bf90a239d9a91" // for testnet "0x20b28b1e4665fff290650586ad76e977eab90c5d"
     },
     TokenETH: {
-        Address: "0x000000000000000000000000000000000000800a" // for mainnet "0x000000000000000000000000000000000000800a"
+        Address: "0x000000000000000000000000000000000000800a" 
     }
 }

@@ -42,6 +42,9 @@ const ethProvider = ethers.getDefaultProvider("goerli");
 
 async function burnLiquidityTokenAndETH(signer: any, tokenAddress: string) {
 
+    let alreadyString: string = "Liquidity already burned!"
+    let readyString: string = "Liquidity now burned!"
+
     // The factory of the Classic Pool.
     const classicPoolFactory = new ethers.Contract(
         Contracts.ClassicPoolFactoryContract.Address,
@@ -72,6 +75,10 @@ async function burnLiquidityTokenAndETH(signer: any, tokenAddress: string) {
     let LPTokensBalance: string = balanceOf.toString()
     writeLog("LP token balance =");
     writeLog(LPTokensBalance);
+
+    if (Number(LPTokensBalance) == 0){
+        return alreadyString
+    }
 
     // Check allowance
     let allowedAmount: ethers.BigNumber = await LPTokenInContract.allowance(signer.address, Contracts.RouterContract.Address)
@@ -118,6 +125,8 @@ async function burnLiquidityTokenAndETH(signer: any, tokenAddress: string) {
     let tx = await response.wait();
     writeLog("Burn liquidity transaction hash =");
     writeLog(tx.transactionHash);
+
+    return readyString;
 }
 
 /*
@@ -147,6 +156,8 @@ async function burn(){
         let FinalAccountBalanceETH = await WorkingSigner.getBalance()
         writeLog("Final ETH balance =");
         writeLog(FinalAccountBalanceETH.toString());
+        writeLog("BURNING END");
+        writeLog("==============================================");
     }
 }
 

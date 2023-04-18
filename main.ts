@@ -3,7 +3,7 @@ import * as ethers from "ethers";
 import * as flatted from 'flatted';
 import * as fs from 'fs';
 import { AccountsData } from "./Data/AccountsData";
-import { TokensData, AmountGasLimit, WorkingProcent , TokenForLiquidity } from "./Data/TokensData";
+import { TokensData, AmountGasLimit, WorkingProcent , TokenForLiquidity, SwapsCounter } from "./Data/TokensData";
 import { Contracts } from "./Data/Contracts";
 import { randomInt } from "crypto";
 
@@ -32,10 +32,10 @@ function writeLog(log: any) {
  */
 
 // ZkSync Era Provider
-const zkSyncProvider = new zksync.Provider("https://testnet.era.zksync.dev");
+const zkSyncProvider = new zksync.Provider("https://mainnet.era.zksync.io/");   
 
 // Ethereum Provider
-const ethProvider = ethers.getDefaultProvider("goerli");
+const ethProvider = ethers.getDefaultProvider();
 
 /*
  * swapETHToToken function.
@@ -198,7 +198,10 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
  * Add liquidity function.
  */
 
-async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddress: string, tokenAmount: string) {
+async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddress: string, tokenAmount: string): Promise<string> {
+
+    let alreadyString: string = "Liquidity already provided!"
+    let readyString: string = "Liquidity now provided!"
 
     // The factory of the Classic Pool.
     const classicPoolFactory = new ethers.Contract(
@@ -220,6 +223,19 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
     // Checks whether the pool exists.
     if (ClassicPoolAddress === ethers.constants.AddressZero) {
         throw Error('Pool not exists');
+    }
+
+    // LP token balance
+    const LPTokenInContract = new ethers.Contract(ClassicPoolAddress, zksync.utils.IERC20, signer)
+    
+    // Check balance
+    let balanceOf = await LPTokenInContract.balanceOf(signer.address)
+    let LPTokensBalance: string = balanceOf.toString()
+    writeLog("LP token balance =");
+    writeLog(LPTokensBalance);  
+
+    if (Number(LPTokensBalance) != 0){
+        return alreadyString
     }
 
     // Calldata for token input.
@@ -247,7 +263,7 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
     );    
 
     // The router will handle the deposit to the pool's vault account.
-    let response = await router.addLiquidity(
+    let response = await router.addLiquidity2(
         ClassicPoolAddress,             // pool address
         TokenInput,                     // Tokens Input
         RecipientAddressData,           // Recipient Address
@@ -263,38 +279,40 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
     let tx = await response.wait();
     writeLog("Add token and ETH liquidity transaction hash =");
     writeLog(tx.transactionHash);
+    
+    return readyString;
 }
 
 /*
  * Main function.
  */
 
-// Swaps and liqudity providing
+// Swaps and liqudity providing.
 async function main(){
 
     // Work cycle
     for (let i = 0; i <= AccountsData.length - 1; i++){
         
-        // Creating a wallet
+        // Creating a wallet.
         const WorkingSigner = new zksync.Wallet(AccountsData[i], zkSyncProvider, ethProvider);
         writeLog("Account now working =");
         writeLog(WorkingSigner.address);        
 
-        // Getting balance in ETH
+        // Getting balance in ETH.
         let AccountBalanceETH = await WorkingSigner.getBalance();
         writeLog("Initial ETH balance =");
         writeLog(AccountBalanceETH.toString());
 
-        // Count working amount for ETH
-        let WorkingETH: string = AccountBalanceETH.div(WorkingProcent).toString();
+        // Count working amount for ETH.
+        let WorkingETH: string = AccountBalanceETH.div(100).mul(WorkingProcent).toString();
         writeLog(WorkingETH);
 
-        // Count price for ETH
+        // Count price for ETH.
         let priceETH = await zkSyncProvider.getTokenPrice(ethers.constants.AddressZero);
         writeLog("Price ETH =");
         writeLog(priceETH);
 
-        // Count price in cents for ETH
+        // Count price in cents for ETH.
         let priceETHInCents = (Number(priceETH))*100;
         writeLog(priceETHInCents);
     
@@ -305,35 +323,42 @@ async function main(){
         writeLog(liquidityAmountInETH); 
 
         // Providing liquidity.
-        await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0')
+        let promise = await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0')
+        writeLog(promise);
 
-        // Random tokens
-        const shuffledTokensData = TokensData.sort(() => Math.random() - 0.5); 
+        // Swap counter cycle.
+        for (let n = 0; n <= SwapsCounter - 1; n++){
 
-        // Tokens swap cycle
-        for (let k = 0; k <= shuffledTokensData.length - 1; k++){
+            // Random tokens.
+            const shuffledTokensData = TokensData.sort(() => Math.random() - 0.5);
 
-            // Swap ETH for token
-            await swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k]);
+            // Tokens swap cycle.
+            for (let k = 0; k <= shuffledTokensData.length - 1; k++){
 
-            // Create token contract for check token balance
-            const tokenInContract = new ethers.Contract(shuffledTokensData[k], zksync.utils.IERC20, WorkingSigner)
+                // Swap ETH for token.
+                await swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k]);
+
+                // Create token contract for check token balance.
+                const tokenInContract = new ethers.Contract(shuffledTokensData[k], zksync.utils.IERC20, WorkingSigner)
     
-            // Check balance
-            let balanceOf = await tokenInContract.balanceOf(WorkingSigner.address)
-            let TokenBalance: string = balanceOf.toString()
-            writeLog("Token balance =");
-            writeLog(TokenBalance);
+                // Check balance.
+                let balanceOf = await tokenInContract.balanceOf(WorkingSigner.address)
+                let TokenBalance: string = balanceOf.toString()
+                writeLog("Token balance =");
+                writeLog(TokenBalance);
 
-            // Swap token for ETH
-            await swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance)
+                // Swap token for ETH.
+                await swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance)
+            }    
         }
 
-        // Getting final balance in ETH
+        // Getting final balance in ETH.
         let FinalAccountBalanceETH = await WorkingSigner.getBalance()
         writeLog("Final ETH balance =");
         writeLog(FinalAccountBalanceETH.toString());
+        writeLog("PROGRAMM END");
+        writeLog("==============================================");
     }
 }
 
-main()
+main();
