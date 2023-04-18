@@ -298,15 +298,6 @@ async function main(){
         writeLog("Account now working =");
         writeLog(WorkingSigner.address);        
 
-        // Getting balance in ETH.
-        let AccountBalanceETH = await WorkingSigner.getBalance();
-        writeLog("Initial ETH balance =");
-        writeLog(AccountBalanceETH.toString());
-
-        // Count working amount for ETH.
-        let WorkingETH: string = AccountBalanceETH.div(100).mul(WorkingProcent).toString();
-        writeLog(WorkingETH);
-
         // Count price for ETH.
         let priceETH = await zkSyncProvider.getTokenPrice(ethers.constants.AddressZero);
         writeLog("Price ETH =");
@@ -325,6 +316,15 @@ async function main(){
         // Providing liquidity.
         let promise = await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0')
         writeLog(promise);
+
+        // Getting balance in ETH.
+        let AccountBalanceETH = await WorkingSigner.getBalance();
+        writeLog("Initial ETH balance =");
+        writeLog(AccountBalanceETH.toString());
+
+        // Count working amount for ETH.
+        let WorkingETH: string = AccountBalanceETH.div(100).mul(WorkingProcent).toString();
+        writeLog(WorkingETH);
 
         // Swap counter cycle.
         for (let n = 0; n <= SwapsCounter - 1; n++){
