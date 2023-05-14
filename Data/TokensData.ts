@@ -8,6 +8,10 @@ export const HighGasPrice: BigNumber = BigNumber.from('1000000000'); // 0,000000
 
 export const SwapsCounter: number = 3; // Number of swaps
 
+// Timer between accounts
+export const timeMin = 3000; // min 3 sec
+export const timeMax = 8000; // max 8 sec
+
 // Array with token address for swaping. 
 export const TokensData: string[] = [
     "0x0faF6df7054946141266420b43783387A78d82A9", // USDC 
