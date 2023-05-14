@@ -2,8 +2,10 @@ import { BigNumber } from "ethers";
 
 export const WorkingProcent: BigNumber =  BigNumber.from("10") // 1% * 10 = 10%
 
-export const AmountGasLimit: string = "14000000"; // Gas in gwei
-1
+export const AmountGasLimit: string = "2000000"; // Gas 2 000 000
+
+export const HighGasPrice: BigNumber = BigNumber.from('1000000000'); // 0,000000001 ETH (1 Gwei)
+
 export const SwapsCounter: number = 3; // Number of swaps
 
 // Array with token address for swaping. 

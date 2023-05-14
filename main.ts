@@ -3,7 +3,7 @@ import * as ethers from "ethers";
 import * as flatted from 'flatted';
 import * as fs from 'fs';
 import { AccountsData } from "./Data/AccountsData";
-import { TokensData, AmountGasLimit, WorkingProcent , TokenForLiquidity, SwapsCounter } from "./Data/TokensData";
+import { TokensData, AmountGasLimit, WorkingProcent , TokenForLiquidity, SwapsCounter, HighGasPrice, timeMax, timeMin } from "./Data/TokensData";
 import { Contracts } from "./Data/Contracts";
 import { randomInt } from "crypto";
 
@@ -41,7 +41,7 @@ const ethProvider = ethers.getDefaultProvider();
  * swapETHToToken function.
  */
 
-async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: string) {
+async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: string, AmountGasPrice: any) {
     
 
     // The factory of the Classic Pool.
@@ -55,8 +55,6 @@ async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: s
     let tokenForPool = Contracts.wETH.Address;
     
     let ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenForPool, tokenOutAddress);
-    writeLog("ClassicPoolAddress =");
-    writeLog(ClassicPoolAddress);
 
     // Checks whether the pool exists.
     if (ClassicPoolAddress === ethers.constants.AddressZero) {
@@ -99,20 +97,22 @@ async function swapETHToToken(signer: any, AmountETH: string, tokenOutAddress: s
         ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
         {
             value: AmountETH,
+            gasPrice: AmountGasPrice,
             gasLimit: AmountGasLimit
         }
     );
 
     let tx = await response.wait();
-    writeLog("Swap ETH to token transaction hash =");
-    writeLog(tx.transactionHash);
+    writeLog(`Swap ETH to token transaction hash = ${tx.transactionHash}`);
+    console.log(`Swap ETH to token transaction hash = ${tx.transactionHash}`);
+
 }
 
 /*
  * swapTokenToETH function.
  */
 
-async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount: string) {
+async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount: string, AmountGasPrice: any) {
     
     // The factory of the Classic Pool.
     const classicPoolFactory = new ethers.Contract(
@@ -125,8 +125,6 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
     let tokenOutPool = Contracts.wETH.Address;
     
     let ClassicPoolAddress: string = await classicPoolFactory.getPool(tokenInAddress, tokenOutPool);
-    writeLog("ClassicPoolAddress =");
-    writeLog(ClassicPoolAddress);
 
     // Checks whether the pool exists.
     if (ClassicPoolAddress === ethers.constants.AddressZero) {
@@ -144,8 +142,9 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
         // Send approve for router contract
         let approveTx = await tokenInContract.approve(Contracts.RouterContract.Address, MAX_APPROVE_VALUE)
         let getApproveTx = await approveTx.wait()
-        writeLog("Approve transaction hash =")
-        writeLog(getApproveTx.transactionHash);
+        writeLog(`Approve transaction hash = ${getApproveTx.transactionHash}`)
+        console.log(`Approve transaction hash = ${getApproveTx.transactionHash}`);
+
     } 
 
     
@@ -185,20 +184,28 @@ async function swapTokenToETH(signer: any, tokenInAddress: string, tokenInAmount
             0, // amountOutMin // Note: ensures slippage here
             ethers.BigNumber.from(Math.floor(Date.now() / 1000)).add(1800), // deadline // 30 minutes
             {
+                gasPrice: AmountGasPrice,
                 gasLimit: AmountGasLimit
             }
         );
 
     let tx = await response.wait();
-    writeLog("Swap token to ETH transaction hash =");
-    writeLog(tx.transactionHash);
+    writeLog(`Swap token to ETH transaction hash = ${tx.transactionHash}`);
+    console.log(`Swap token to ETH transaction hash = ${tx.transactionHash}`);
+    
 }
 
 /*
  * Add liquidity function.
  */
 
-async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddress: string, tokenAmount: string): Promise<string> {
+async function addLiquidityTokenAndETH(
+    signer: any, 
+    AmountETH: string, 
+    tokenAddress: string, 
+    tokenAmount: string, 
+    AmountGasPrice: any
+    ): Promise<string> {
 
     let alreadyString: string = "Liquidity already provided!"
     let readyString: string = "Liquidity now provided!"
@@ -217,8 +224,6 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
     let ETHAddress = Contracts.wETH.Address;
     
     let ClassicPoolAddress: string = await classicPoolFactory.getPool(ETHAddress, tokenAddress);
-    writeLog("ClassicPoolAddress =");
-    writeLog(ClassicPoolAddress);
 
     // Checks whether the pool exists.
     if (ClassicPoolAddress === ethers.constants.AddressZero) {
@@ -231,8 +236,6 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
     // Check balance
     let balanceOf = await LPTokenInContract.balanceOf(signer.address)
     let LPTokensBalance: string = balanceOf.toString()
-    writeLog("LP token balance =");
-    writeLog(LPTokensBalance);  
 
     if (Number(LPTokensBalance) != 0){
         return alreadyString
@@ -252,8 +255,6 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
         ["address"],
         [RecipientAddress], // address _to
     );
-    writeLog("RecipientAddressData =");
-    writeLog(RecipientAddressData);
 
     // Gets the router contract.
     const router = new ethers.Contract(
@@ -271,14 +272,15 @@ async function addLiquidityTokenAndETH(signer: any, AmountETH: string, tokenAddr
         ethers.constants.AddressZero,   // we don't have a callback
         '0x',
         {
-            value: AmountETH, 
+            value: AmountETH,
+            gasPrice: AmountGasPrice, 
             gasLimit: AmountGasLimit
         }
     );
 
     let tx = await response.wait();
-    writeLog("Add token and ETH liquidity transaction hash =");
-    writeLog(tx.transactionHash);
+    writeLog(`Add token and ETH liquidity transaction hash = ${tx.transactionHash}`);
+    console.log(`Add token and ETH liquidity transaction hash = ${tx.transactionHash}`);
     
     return readyString;
 }
@@ -295,36 +297,40 @@ async function main(){
         
         // Creating a wallet.
         const WorkingSigner = new zksync.Wallet(AccountsData[i], zkSyncProvider, ethProvider);
-        writeLog("Account now working =");
-        writeLog(WorkingSigner.address);        
+        writeLog(`Account now working = ${WorkingSigner.address}`);
+        console.log(`Account now working = ${WorkingSigner.address}`);
+
+        
+        // Check gas price
+        var AmountGasPrice = await zkSyncProvider.getGasPrice();
+        
+        if (AmountGasPrice.lt(HighGasPrice)){
 
         // Count price for ETH.
         let priceETH = await zkSyncProvider.getTokenPrice(ethers.constants.AddressZero);
-        writeLog("Price ETH =");
-        writeLog(priceETH);
+        writeLog(`Price ETH = ${priceETH}`);
+        console.log(`Price ETH = ${priceETH}`);
 
         // Count price in cents for ETH.
         let priceETHInCents = (Number(priceETH))*100;
-        writeLog(priceETHInCents);
     
         // 10-11$
         let liquidityAmountInCents = 1000 + randomInt(100) // random 10-11$ 
         let liquidityAmountInETH = Math.floor(1000000000000000000 / (priceETHInCents / liquidityAmountInCents)) 
-        writeLog("liquidityAmountInETH =");
-        writeLog(liquidityAmountInETH); 
+        writeLog(`liquidityAmountInETH =${ethers.utils.formatUnits(liquidityAmountInETH.toString(),18)}`);
+        console.log(`liquidityAmountInETH =${ethers.utils.formatUnits(liquidityAmountInETH.toString(),18)}`);
 
         // Providing liquidity.
-        let promise = await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0')
+        let promise = await addLiquidityTokenAndETH(WorkingSigner, liquidityAmountInETH.toString() , TokenForLiquidity, '0', AmountGasPrice)
         writeLog(promise);
 
         // Getting balance in ETH.
         let AccountBalanceETH = await WorkingSigner.getBalance();
-        writeLog("Initial ETH balance =");
-        writeLog(AccountBalanceETH.toString());
+        writeLog(`Initial ETH balance = ${AccountBalanceETH.toString()}`);
+        console.log(`Initial ETH balance = ${AccountBalanceETH.toString()}`);
 
         // Count working amount for ETH.
         let WorkingETH: string = AccountBalanceETH.div(100).mul(WorkingProcent).toString();
-        writeLog(WorkingETH);
 
         // Swap counter cycle.
         for (let n = 0; n <= SwapsCounter - 1; n++){
@@ -336,7 +342,7 @@ async function main(){
             for (let k = 0; k <= shuffledTokensData.length - 1; k++){
 
                 // Swap ETH for token.
-                await swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k]);
+                await swapETHToToken(WorkingSigner, WorkingETH, shuffledTokensData[k], AmountGasPrice);
 
                 // Create token contract for check token balance.
                 const tokenInContract = new ethers.Contract(shuffledTokensData[k], zksync.utils.IERC20, WorkingSigner)
@@ -344,21 +350,42 @@ async function main(){
                 // Check balance.
                 let balanceOf = await tokenInContract.balanceOf(WorkingSigner.address)
                 let TokenBalance: string = balanceOf.toString()
-                writeLog("Token balance =");
-                writeLog(TokenBalance);
 
                 // Swap token for ETH.
-                await swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance)
+                await swapTokenToETH(WorkingSigner, shuffledTokensData[k], TokenBalance, AmountGasPrice)
             }    
         }
 
         // Getting final balance in ETH.
         let FinalAccountBalanceETH = await WorkingSigner.getBalance()
-        writeLog("Final ETH balance =");
-        writeLog(FinalAccountBalanceETH.toString());
-        writeLog("PROGRAMM END");
+        writeLog(`Final ETH balance = ${ethers.utils.formatUnits(FinalAccountBalanceETH.toString(), 18)}`);
+        console.log(`Final ETH balance = ${ethers.utils.formatUnits(FinalAccountBalanceETH.toString(), 18)}`);
         writeLog("==============================================");
+        console.log("==============================================");
+        } else {
+            writeLog("GAS PRICE TO HIGH");
+            console.log("GAS PRICE TO HIGH");
+            writeLog("WAITING 5 MINS AND TRY AGAIN");
+            console.log("WAITING 5 MINS AND TRY AGAIN");
+            writeLog("==============================================");
+            console.log("==============================================");
+            setTimeout(main, 300000)
+        }
+
+        let timer = randomInt(timeMax) + timeMin;
+    
+        writeLog(`Work with account №${i} is finished`);
+        console.log(`Work with account №${i} is finished`);
+        writeLog(`Waiting ${timer/1000} sec`);
+        console.log(`Waiting ${timer/1000} sec`);
+    
+        await new Promise(r => setTimeout(r, timer)); // Wait 3-11 sec
+
     }
+
+    writeLog("PROGRAMM END");
+    console.log("PROGRAMM END");
+
 }
 
 main();
